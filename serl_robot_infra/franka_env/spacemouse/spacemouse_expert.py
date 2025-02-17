@@ -216,7 +216,7 @@ class KbdExpert:
         self.latest_data = self.manager.dict()
         self.latest_data["action"] = [0.0] * 6
         self.latest_data["buttons"] = [False, False]
-        self.control_speed = 0.025
+        self.control_speed = 0.05
 
         # Start a process to continuously read kbd state
         self.process = multiprocessing.Process(target=self. _read_keyboard_process)
@@ -226,11 +226,18 @@ class KbdExpert:
 
 
     def _read_keyboard_process(self):
-        with keyboard.Listener(on_press=self._read_keyboard) as listener:
+        with keyboard.Listener(on_press=self._key_press, on_release=self._key_release) as listener:
             listener.join()
-            
 
-    def _read_keyboard(self, key):
+
+    def _key_release(self, key):
+        # Reset the action when the key is released
+        self.latest_data["action"] = [0.0] * 6
+        # You can also reset the buttons if needed
+        self.latest_data["buttons"] = [False, False]
+
+
+    def _key_press(self, key):
         action = [0.0] * 6
         buttons = [False, False]
         

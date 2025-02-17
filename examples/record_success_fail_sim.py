@@ -3,6 +3,7 @@ import os
 from tqdm import tqdm
 import numpy as np
 import pickle as pkl
+import random
 import datetime
 from absl import app, flags
 from pynput import keyboard
@@ -10,6 +11,21 @@ from pynput import keyboard
 from experiments.mappings import CONFIG_MAPPING
 
 from franka_sim.utils.viewer_utils import DualMujocoViewer
+
+import sys
+import termios
+import tty
+
+def getch():
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
 
 # import debugpy
 # try:
@@ -20,23 +36,25 @@ from franka_sim.utils.viewer_utils import DualMujocoViewer
 # except Exception as e:
 #     pass
 
+
 FLAGS = flags.FLAGS
 flags.DEFINE_string("exp_name", None, "Name of experiment corresponding to folder.")
 flags.DEFINE_integer("successes_needed", 200, "Number of successful transistions to collect.")
 
-
 success_key = False
 start_key = False
 def on_press(key):
-    global success_key
+    global success_key, start_key
     try:
         if str(key) == 'Key.enter':
             success_key = True
+        if str(key) == 'Key.space':
+            start_key = True
     except AttributeError:
         pass
 
 def main(_):
-    global success_key
+    global success_key, start_key
     listener = keyboard.Listener(
         on_press=on_press)
     listener.start()
@@ -48,12 +66,14 @@ def main(_):
     successes = []
     failures = []
     success_needed = FLAGS.successes_needed
+    failure_needed = success_needed * 5
     pbar = tqdm(total=success_needed)
     
     # Create the dual viewer
     dual_viewer = DualMujocoViewer(env.unwrapped.model, env.unwrapped.data)
 
-    print("Press shift to start recording, press enter to record a successful transition.\nIf your controller is not working check controller_type (default is xbox) is configured in examples/experiments/pick_cube_sim/config.py")
+    print("enter to record a successful transition.")
+
     with dual_viewer as viewer:
 
         while viewer.is_running():
@@ -83,22 +103,27 @@ def main(_):
                 failures.append(transition)
 
             if done or truncated:
+                # print("waiting for space to restart recording...")
+                # while not start_key:
+                #     pass
                 obs, _ = env.reset()
             if len(successes) >= success_needed:
                 break
 
     if not os.path.exists("./classifier_data"):
         os.makedirs("./classifier_data")
+        
     uuid = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
     file_name = f"./classifier_data/{FLAGS.exp_name}_{success_needed}_success_images_{uuid}.pkl"
     with open(file_name, "wb") as f:
         pkl.dump(successes, f)
         print(f"saved {success_needed} successful transitions to {file_name}")
 
-    file_name = f"./classifier_data/{FLAGS.exp_name}_failure_images_{uuid}.pkl"
+    file_name = f"./classifier_data/{FLAGS.exp_name}_{failure_needed}_failure_images_{uuid}.pkl"
     with open(file_name, "wb") as f:
-        pkl.dump(failures, f)
-        print(f"saved {len(failures)} failure transitions to {file_name}")
+        pkl.dump(random.sample(failures, failure_needed), f)
+        print(f"saved {failure_needed} failure transitions to {file_name}")
         
 if __name__ == "__main__":
     app.run(main)
