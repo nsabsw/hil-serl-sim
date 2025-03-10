@@ -37,6 +37,12 @@ import mujoco.viewer
 
 from franka_sim.utils.viewer_utils import DualMujocoViewer
 
+
+import sys
+import termios
+import tty
+
+
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string("exp_name", None, "Name of experiment corresponding to folder.")
@@ -59,7 +65,7 @@ devices = jax.local_devices()
 num_devices = len(devices)
 sharding = jax.sharding.PositionalSharding(devices)
 
-
+    
 def print_green(x):
     return print("\033[92m {}\033[00m".format(x))
 
@@ -151,6 +157,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
     already_intervened = False
     intervention_count = 0
     intervention_steps = 0
+    s = 0
 
     # Create the dual viewer
     dual_viewer = DualMujocoViewer(env.model, env.data)
@@ -177,6 +184,7 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
             with timer.context("step_env"):
 
                 next_obs, reward, done, truncated, info = env.step(actions)
+                s += 1
 
                 if "left" in info:
                     info.pop("left")
@@ -212,12 +220,20 @@ def actor(agent, data_store, intvn_data_store, env, sampling_rng):
                     demo_transitions.append(copy.deepcopy(transition))
 
                 obs = next_obs
+
+                if done:
+                    print('done!!!')
+                    print(f"step:{s}")
+                if truncated:
+                    print('truncated!!!')
+
                 if done or truncated:
                     info["episode"]["intervention_count"] = intervention_count
                     info["episode"]["intervention_steps"] = intervention_steps
                     stats = {"environment": info}  # send stats to the learner to log
                     client.request("send-stats", stats)
                     pbar.set_description(f"last return: {running_return}")
+                    s = 0
                     running_return = 0.0
                     intervention_count = 0
                     intervention_steps = 0
@@ -369,6 +385,16 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
 
 
 def main(_):
+    if FLAGS.debug:
+        import debugpy
+        try:
+            # 5678 is the default attach port in the VS Code debug configurations. Unless a host and port are specified, host defaults to 127.0.0.1
+            debugpy.listen(("localhost", 9501))
+            print("Waiting for debugger attach")
+            debugpy.wait_for_client()
+        except Exception as e:
+            pass
+
     global config
     config = CONFIG_MAPPING[FLAGS.exp_name]()
 
@@ -426,17 +452,17 @@ def main(_):
         jax.tree_map(jnp.array, agent), sharding.replicate()
     )
 
-    if FLAGS.checkpoint_path is not None and os.path.exists(FLAGS.checkpoint_path):
-        input("Checkpoint path already exists. Press Enter to resume training.")
-        ckpt = checkpoints.restore_checkpoint(
-            os.path.abspath(FLAGS.checkpoint_path),
-            agent.state,
-        )
-        agent = agent.replace(state=ckpt)
-        ckpt_number = os.path.basename(
-            checkpoints.latest_checkpoint(os.path.abspath(FLAGS.checkpoint_path))
-        )[11:]
-        print_green(f"Loaded previous checkpoint at step {ckpt_number}.")
+    # if FLAGS.checkpoint_path is not None and os.path.exists(FLAGS.checkpoint_path):
+    #     input("Checkpoint path already exists. Press Enter to resume training.")
+    #     ckpt = checkpoints.restore_checkpoint(
+    #         os.path.abspath(FLAGS.checkpoint_path),
+    #         agent.state,
+    #     )
+    #     agent = agent.replace(state=ckpt)
+    #     ckpt_number = os.path.basename(
+    #         checkpoints.latest_checkpoint(os.path.abspath(FLAGS.checkpoint_path))
+    #     )[11:]
+    #     print_green(f"Loaded previous checkpoint at step {ckpt_number}.")
 
     def create_replay_buffer_and_wandb_logger():
         replay_buffer = MemoryEfficientReplayBufferDataStore(

@@ -49,9 +49,13 @@ class MultiCameraBinaryRewardClassifierWrapper(gym.Wrapper):
         self.target_hz = target_hz
 
     def compute_reward(self, obs):
-        if self.reward_classifier_func is not None:
-            return self.reward_classifier_func(obs)
-        return 0
+        # if self.reward_classifier_func is not None:
+        #     return self.reward_classifier_func(obs)
+        # return 0
+        block_pos = self.unwrapped._data.sensor("block_pos").data
+        lift = block_pos[2] - self.unwrapped._z_init
+        return float(lift > 0.2)
+        
 
     def step(self, action):
         start_time = time.time()
@@ -478,7 +482,7 @@ class KbdIntervention(gym.ActionWrapper):
         self.action_indices = action_indices
 
         self.expert = KbdExpert()
-        self.left, self.right = False, False
+        self.left, self.right, self.stop, self.stop_mode = False, False, False, False
 
     def action(self, action: np.ndarray) -> np.ndarray:
         """
@@ -490,7 +494,9 @@ class KbdIntervention(gym.ActionWrapper):
         deadzone = 0.01
 
         expert_a, buttons = self.expert.get_action()
-        self.left, self.right = tuple(buttons)
+        self.left, self.right, self.stop, mode = tuple(buttons)
+        if mode:
+            self.stop_mode = not self.stop_mode
         intervened = False
 
         if np.linalg.norm(expert_a) >= deadzone:
@@ -502,6 +508,9 @@ class KbdIntervention(gym.ActionWrapper):
                 intervened = True
             elif self.right: # open gripper
                 gripper_action = np.random.uniform(0.9, 1, size=(1,))
+                intervened = True
+            elif self.stop and self.stop_mode: # stop
+                gripper_action = np.zeros((1,))
                 intervened = True
             else:
                 gripper_action = np.zeros((1,))

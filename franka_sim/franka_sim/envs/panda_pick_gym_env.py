@@ -197,10 +197,10 @@ class PandaPickCubeGymEnv(MujocoGymEnv):
         self._data.mocap_pos[0] = npos
 
         # Set the mocap orientation.
-        ori = self._data.mocap_quat[0].copy()
-        dori = np.asarray([rx, ry, rz]) * self._action_scale[0]
-        nori = (Rotation.from_euler("xyz", dori) * Rotation.from_quat(ori)).as_quat()
-        self._data.mocap_quat[0] = nori
+        # ori = self._data.mocap_quat[0].copy()
+        # dori = np.asarray([rx, ry, rz]) * self._action_scale[0]
+        # nori = (Rotation.from_euler("xyz", dori) * Rotation.from_quat(ori)).as_quat()
+        # self._data.mocap_quat[0] = nori
 
         # Set gripper grasp.
         g = self._data.ctrl[self._gripper_ctrl_id] / 255

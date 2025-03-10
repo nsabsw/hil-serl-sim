@@ -67,7 +67,9 @@ def main(_):
     failures = []
     success_needed = FLAGS.successes_needed
     failure_needed = success_needed * 5
-    pbar = tqdm(total=success_needed)
+    # pbar = tqdm(total=success_needed)
+    pbar = tqdm(total=20)
+    count = 0
     
     # Create the dual viewer
     dual_viewer = DualMujocoViewer(env.unwrapped.model, env.unwrapped.data)
@@ -97,8 +99,8 @@ def main(_):
             obs = next_obs
             if success_key or info["succeed"]:
                 successes.append(transition)
-                pbar.update(1)
-                success_key = False
+                # pbar.update(1)
+                # success_key = False
             else:
                 failures.append(transition)
 
@@ -107,8 +109,14 @@ def main(_):
                 # while not start_key:
                 #     pass
                 obs, _ = env.reset()
-            if len(successes) >= success_needed:
+                success_key = False
+                pbar.update(1)
+                count += 1
+
+            if count >= 20:
                 break
+            # if len(successes) >= success_needed:
+            #     break
 
     if not os.path.exists("./classifier_data"):
         os.makedirs("./classifier_data")
@@ -117,7 +125,7 @@ def main(_):
 
     file_name = f"./classifier_data/{FLAGS.exp_name}_{success_needed}_success_images_{uuid}.pkl"
     with open(file_name, "wb") as f:
-        pkl.dump(successes, f)
+        pkl.dump(random.sample(successes, success_needed), f)
         print(f"saved {success_needed} successful transitions to {file_name}")
 
     file_name = f"./classifier_data/{FLAGS.exp_name}_{failure_needed}_failure_images_{uuid}.pkl"

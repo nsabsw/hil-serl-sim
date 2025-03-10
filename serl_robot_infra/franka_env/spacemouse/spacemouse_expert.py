@@ -215,8 +215,8 @@ class KbdExpert:
         self.manager = multiprocessing.Manager()
         self.latest_data = self.manager.dict()
         self.latest_data["action"] = [0.0] * 6
-        self.latest_data["buttons"] = [False, False]
-        self.control_speed = 0.05
+        self.latest_data["buttons"] = [False, False, False, False]
+        self.control_speed = 0.025
 
         # Start a process to continuously read kbd state
         self.process = multiprocessing.Process(target=self. _read_keyboard_process)
@@ -231,15 +231,18 @@ class KbdExpert:
 
 
     def _key_release(self, key):
+        action = [0.0] * 6
+        buttons = [False, False, False, False]
         # Reset the action when the key is released
-        self.latest_data["action"] = [0.0] * 6
+        self.latest_data["action"] = action 
         # You can also reset the buttons if needed
-        self.latest_data["buttons"] = [False, False]
+        buttons[2] = True
+        self.latest_data["buttons"] = buttons
 
 
     def _key_press(self, key):
         action = [0.0] * 6
-        buttons = [False, False]
+        buttons = [False, False, False, False]
         
         try:
             code = key.char # simple
@@ -277,6 +280,8 @@ class KbdExpert:
             buttons[1] = True # close
         elif code == 'alt':
             buttons[0] = True # open
+        elif code == 'enter':
+            buttons[3] = True # switch
 
         # Update the shared state
         self.latest_data["action"] = action
